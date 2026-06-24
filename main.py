@@ -7,6 +7,7 @@ from urllib.parse import urlparse
 from crawlers.base import ProductUnavailableError, CrawlerError
 from crawlers.basalam import BasalamCrawler
 from crawlers.emalls import EmallsCrawler
+from crawlers.snappshop import SnappShopCrawler
 from exporters.sazito_csv import SazitoCsvExporter
 from memory import ExportMemory
 
@@ -20,8 +21,9 @@ log = logging.getLogger(__name__)
 # Registry: map domain → crawler class.
 # To add a new site, import its crawler and add one line here.
 CRAWLER_REGISTRY = {
-    "basalam.com": BasalamCrawler,
-    "emalls.ir":   EmallsCrawler,
+    "basalam.com":  BasalamCrawler,
+    "emalls.ir":    EmallsCrawler,
+    "snappshop.ir": SnappShopCrawler,
     # "torob.com": TorobCrawler,
     # "digikala.com": DigikalaCrawler,
     # "divar.ir": DivarCrawler,
