@@ -17,9 +17,10 @@ BASE_URL  = "https://emalls.ir"
 UNLIMITED_STOCK = -1
 
 # Reversed product path format: /slug~id~12345
-_ESREVER_RE  = re.compile(r"^(/\S+~id~(\d+))")
-_JSONLD_RE   = re.compile(r'<script[^>]*application/ld\+json[^>]*>(.*?)</script>', re.DOTALL | re.I)
+_ESREVER_RE   = re.compile(r"^(/\S+~id~(\d+))")
+_JSONLD_RE    = re.compile(r'<script[^>]*application/ld\+json[^>]*>(.*?)</script>', re.DOTALL | re.I)
 _META_DESC_RE = re.compile(r'<meta[^>]*name=["\']description["\'][^>]*content="([^"]+)"', re.I)
+_PAGE_RE      = re.compile(r'~page~(\d+)', re.I)
 
 
 class EmallsCrawler(BaseCrawler):
@@ -68,28 +69,48 @@ class EmallsCrawler(BaseCrawler):
         )
 
     def iter_product_ids(self, vendor_id: str) -> Iterator[str]:
-        html = self._get_html(self._listing_url)
-        log.info("Shop page fetched — parsing product IDs")
+        # Strip any existing ~page~N from the base URL so we can paginate cleanly
+        base_url = _PAGE_RE.sub("", self._listing_url).rstrip("~")
 
-        # data-esrever contains reversed product paths, e.g.:
-        #   raw:      "03419762~di~هار-هار-حرط-تاملپید..."
-        #   reversed: "/مشخصات_مانتو-...~id~26791430"
-        esrevers = re.findall(r'data-esrever="([^"]+)"', html)
         seen: set = set()
-        for raw in esrevers:
-            reversed_val = raw[::-1]
-            m = _ESREVER_RE.search(reversed_val)
-            if not m:
-                continue
-            url_path, product_id = m.group(1), m.group(2)
-            if product_id in seen:
-                continue
-            seen.add(product_id)
-            self._product_urls[product_id] = url_path
-            yield product_id
-        # All products come from one page — no pagination sleep needed
+        page = 1
 
-        log.info("Found %d unique products", len(seen))
+        while True:
+            url = base_url if page == 1 else f"{base_url}~page~{page}"
+            log.info("Fetching page %d: %s", page, url)
+            html = self._get_html(url)
+
+            # Determine last page from pagination links on first fetch
+            if page == 1:
+                page_nums = [int(n) for n in _PAGE_RE.findall(html)]
+                last_page = max(page_nums) if page_nums else 1
+                log.info("Total pages: %d", last_page)
+
+            # data-esrever contains reversed product paths, e.g.:
+            #   raw:      "03419762~di~هار-هار-حرط-تاملپید..."
+            #   reversed: "/مشخصات_مانتو-...~id~26791430"
+            before = len(seen)
+            esrevers = re.findall(r'data-esrever="([^"]+)"', html)
+            for raw in esrevers:
+                reversed_val = raw[::-1]
+                m = _ESREVER_RE.search(reversed_val)
+                if not m:
+                    continue
+                url_path, product_id = m.group(1), m.group(2)
+                if product_id in seen:
+                    continue
+                seen.add(product_id)
+                self._product_urls[product_id] = url_path
+                yield product_id
+
+            log.info("Page %d: %d new products (total %d)", page, len(seen) - before, len(seen))
+
+            if page >= last_page:
+                break
+            page += 1
+            time.sleep(self.rate_limit)
+
+        log.info("Found %d unique products across %d pages", len(seen), page)
 
     def get_product_detail(self, product_id: str) -> Product:
         path = self._product_urls.get(product_id)
