@@ -8,6 +8,7 @@ from crawlers.base import ProductUnavailableError, CrawlerError
 from crawlers.basalam import BasalamCrawler
 from crawlers.emalls import EmallsCrawler
 from crawlers.snappshop import SnappShopCrawler
+from crawlers.shopino import ShopinoCrawler
 from exporters.sazito_csv import SazitoCsvExporter
 from memory import ExportMemory
 
@@ -24,6 +25,7 @@ CRAWLER_REGISTRY = {
     "basalam.com":  BasalamCrawler,
     "emalls.ir":    EmallsCrawler,
     "snappshop.ir": SnappShopCrawler,
+    "shopino.app":  ShopinoCrawler,
     # "torob.com": TorobCrawler,
     # "digikala.com": DigikalaCrawler,
     # "divar.ir": DivarCrawler,
