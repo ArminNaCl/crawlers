@@ -2,7 +2,7 @@
 
 Crawls seller profiles and category pages from Iranian e-commerce sites and exports products to CSV files ready for bulk import into Sazito.
 
-**Supported sites:** Basalam, Emalls
+**Supported sites:** Basalam, Emalls, SnappShop, Shopino
 
 ## Project structure
 
@@ -15,7 +15,9 @@ crawler/
 ├── crawlers/
 │   ├── base.py                 Abstract BaseCrawler + exceptions
 │   ├── basalam.py              Basalam implementation (API)
-│   └── emalls.py               Emalls implementation (HTML scraping)
+│   ├── emalls.py               Emalls implementation (HTML scraping)
+│   ├── snappshop.py            SnappShop implementation (reverse-engineered API)
+│   └── shopino.py              Shopino implementation (public REST API)
 └── exporters/
     └── sazito_csv.py           Sazito 36-column CSV writer
 ```
@@ -43,6 +45,15 @@ python3 main.py --url "https://emalls.ir/لیست-قیمت_پیراهن-دختر
 
 # Emalls — category with tag filter
 python3 main.py --url "https://emalls.ir/لیست-قیمت~Category~32333~tag~maserati-girls-shirt" --output ./output
+
+# SnappShop — seller page with category filter
+python3 main.py --url "https://snappshop.ir/seller/0W6W2g?category_chips=g3vvnD" --output ./output
+
+# Shopino — shop page (all products)
+python3 main.py --url "https://shopino.app/shops/1802" --output ./output
+
+# Shopino — shop page with category filter
+python3 main.py --url "https://shopino.app/shops/1802?category=173" --output ./output
 
 # Second run on the same source — already-exported products are skipped automatically
 python3 main.py --url https://basalam.com/valas_shop --output ./output2
@@ -78,7 +89,8 @@ python3 main.py --url https://emalls.ir/Shop/75118 --output ./output --rate-limi
 - **File splitting** — new file is opened automatically when the current one approaches 5 MB (Sazito's import limit)
 - **Images** — full-resolution product images are included as comma-separated URLs in the `images` column
 - **Products are imported as inactive** (`enabled=false`) with unlimited stock
-- **SKUs** are auto-generated: `BS-{id}-{variant}` for Basalam, `EM-{id}-0` for Emalls
+- **SKUs** are auto-generated: `BS-{id}-{variant}` for Basalam, `EM-{id}-0` for Emalls, `SS-{id}-{variant}` for SnappShop, `SHO-{id}-{variant}` for Shopino
+- **Shopino prices** are already in Toman — no conversion needed
 
 ## Adding a new site
 
