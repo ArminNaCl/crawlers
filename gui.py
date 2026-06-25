@@ -246,28 +246,37 @@ def main() -> None:
 
     url = f"http://127.0.0.1:{port}"
 
+    _use_webview = False
     try:
         import webview  # type: ignore[import]
-        window = webview.create_window(
-            "Product Scraper — استخراج محصولات",
-            url,
-            width=700,
-            height=720,
-            resizable=True,
-            min_size=(560, 520),
-        )
-        webview.start()
+        _use_webview = True
     except ImportError:
-        # Dev fallback on Linux without pywebview installed
-        import webbrowser
-        log.info("pywebview not found — opening browser at %s", url)
-        webbrowser.open(url)
-        # Keep the Flask thread alive
+        pass
+
+    if _use_webview:
         try:
-            while True:
-                time.sleep(1)
-        except KeyboardInterrupt:
-            pass
+            window = webview.create_window(  # noqa: F821
+                "Product Scraper — استخراج محصولات",
+                url,
+                width=700,
+                height=720,
+                resizable=True,
+                min_size=(560, 520),
+            )
+            webview.start()  # noqa: F821
+            return
+        except Exception as exc:
+            # WebViewException: no GTK/Qt backend available (common on Linux)
+            log.info("pywebview backend unavailable (%s) — falling back to browser", exc)
+
+    import webbrowser
+    log.info("Opening browser at %s  (press Ctrl+C to quit)", url)
+    webbrowser.open(url)
+    try:
+        while True:
+            time.sleep(1)
+    except KeyboardInterrupt:
+        pass
 
 
 if __name__ == "__main__":
