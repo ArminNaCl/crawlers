@@ -131,7 +131,7 @@ class SnappShopCrawler(BaseCrawler):
 
         title = self._extract_title(item)
         description = self._extract_description(item)
-        images = [img["src"] for img in item.get("images", []) if img.get("src")]
+        images = self._extract_images(item, page_info)
         product_url = f"{BASE_URL}/product/snp-{product_id}"
 
         variants = self._extract_variants(item, product_id)
@@ -153,6 +153,21 @@ class SnappShopCrawler(BaseCrawler):
     # ------------------------------------------------------------------ #
     # Private helpers                                                      #
     # ------------------------------------------------------------------ #
+
+    def _extract_images(self, item: dict, page_info: dict) -> list:
+        og_image = next(
+            (m["content"] for m in (page_info.get("extra_meta") or [])
+             if m.get("property") == "og:image" and m.get("content")),
+            None,
+        )
+        gallery = [img["src"] for img in item.get("images", []) if img.get("src")]
+        seen: set = set()
+        result = []
+        for url in ([og_image] if og_image else []) + gallery:
+            if url and url not in seen:
+                seen.add(url)
+                result.append(url)
+        return result
 
     def _extract_title(self, item: dict) -> str:
         # Prefer the first image alt tag — clean product name without SEO prefix
