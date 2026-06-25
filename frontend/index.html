@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>استخراج داده</title>
+    <link rel="stylesheet" href="./static/style.css">
+</head>
+<body>
+    <div class="container">
+        <h1>استخراج اطلاعات</h1>
+
+        <div class="platform-selection">
+            <h2>انتخاب پلتفرم</h2>
+            <div class="platforms">
+                <button class="platform-btn" data-platform="basalam">باسلام</button>
+                <button class="platform-btn" data-platform="emalls">ایلماز</button>
+                <button class="platform-btn" data-platform="shopino">شاپینو</button>
+                <button class="platform-btn" data-platform="snappshop">اسنپ شاپ</button>
+            </div>
+        </div>
+
+        <div class="input-section" id="inputSection" style="display: none;">
+            <h2 id="selectedPlatform"></h2>
+            <div class="form-group">
+                <label for="linkInput">لینک را وارد کنید:</label>
+                <input type="text" id="linkInput" placeholder="https://...">
+            </div>
+            <button class="submit-btn" id="submitBtn">استخراج</button>
+        </div>
+
+        <div class="loading" id="loading" style="display: none;">
+            <div class="spinner"></div>
+            <p>در حال پردازش...</p>
+            <pre id="logBox" class="log-box"></pre>
+        </div>
+
+        <div class="result-section" id="resultSection" style="display: none;">
+            <h2>نتیجه</h2>
+            <p id="resultMessage"></p>
+            <div id="downloadLinks"></div>
+        </div>
+    </div>
+
+    <script src="./static/script.js"></script>
+</body>
+</html>
