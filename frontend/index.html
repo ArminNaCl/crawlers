@@ -1,58 +1,61 @@
 <!DOCTYPE html>
-<html lang="fa" dir="rtl">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>EComCrawler</title>
-    <!-- Octopus emoji favicon via inline SVG -->
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🐙</text></svg>">
     <link rel="stylesheet" href="./static/style.css">
 </head>
 <body>
     <div class="container">
-        <div class="app-header">
+
+        <header class="app-header">
             <span class="logo">🐙</span>
-            <h1>EComCrawler</h1>
-        </div>
+            <div>
+                <h1>EComCrawler</h1>
+                <p class="tagline">Product data extractor</p>
+            </div>
+        </header>
 
-        <div class="platform-selection">
-            <h2>انتخاب پلتفرم</h2>
+        <div class="divider"></div>
+
+        <section class="platform-section">
+            <label class="section-label">Select Platform</label>
             <div class="platforms">
-                <button class="platform-btn" data-platform="basalam">باسلام</button>
-                <button class="platform-btn" data-platform="emalls">ایلماز</button>
-                <button class="platform-btn" data-platform="shopino">شاپینو</button>
-                <button class="platform-btn" data-platform="snappshop">اسنپ شاپ</button>
+                <button class="platform-btn" data-platform="basalam">Basalam</button>
+                <button class="platform-btn" data-platform="emalls">Emalls</button>
+                <button class="platform-btn" data-platform="shopino">Shopino</button>
+                <button class="platform-btn" data-platform="snappshop">SnappShop</button>
             </div>
-        </div>
+        </section>
 
-        <div class="input-section" id="inputSection" style="display: none;">
-            <h2 id="selectedPlatform"></h2>
-            <div class="form-group">
-                <label for="linkInput">لینک را وارد کنید:</label>
+        <section class="url-section" id="urlSection" style="display:none;">
+            <label class="section-label" id="platformLabel"></label>
+            <div class="url-row">
                 <input type="text" id="linkInput" placeholder="https://...">
+                <button class="extract-btn" id="submitBtn">Extract</button>
             </div>
-            <button class="submit-btn" id="submitBtn">استخراج</button>
-        </div>
+        </section>
 
-        <div class="loading" id="loading" style="display: none;">
-            <div class="spinner"></div>
-            <p>در حال پردازش...</p>
+        <section class="status-section" id="statusSection" style="display:none;">
+            <div class="status-row">
+                <div class="spinner"></div>
+                <span id="statusText">Extracting products...</span>
+            </div>
             <pre id="logBox" class="log-box"></pre>
-        </div>
+        </section>
 
-        <div class="result-section" id="resultSection" style="display: none;">
-            <h2>نتیجه</h2>
+        <section class="result-section" id="resultSection" style="display:none;">
             <p id="resultMessage"></p>
-            <!-- shown in browser mode -->
             <div id="downloadLinks"></div>
-            <!-- shown in pywebview/Windows mode -->
             <div id="folderSection" style="display:none;">
                 <p class="save-path" id="savePath"></p>
-                <button class="open-folder-btn" id="openFolderBtn">📂 باز کردن پوشه</button>
+                <button class="open-folder-btn" id="openFolderBtn">📂 Open Folder</button>
             </div>
-        </div>
-    </div>
+        </section>
 
+    </div>
     <script src="./static/script.js"></script>
 </body>
 </html>

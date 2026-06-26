@@ -289,6 +289,15 @@ def main() -> None:
         datefmt="%H:%M:%S",
     )
 
+    # Persist all logs to a file alongside the output CSVs
+    log_file = DOWNLOADS_DIR / "ecomcrawler.log"
+    file_handler = logging.FileHandler(log_file, encoding="utf-8")
+    file_handler.setFormatter(
+        logging.Formatter("%(asctime)s [%(levelname)s] %(name)s — %(message)s")
+    )
+    logging.getLogger().addHandler(file_handler)
+    log.info("Log file: %s", log_file)
+
     port = _find_free_port()
     flask_thread = threading.Thread(
         target=lambda: app.run(

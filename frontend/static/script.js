@@ -2,7 +2,7 @@ let selectedPlatform = null;
 let isWebview = false;
 let _savedFolderPath = '';
 
-// Ask the server which mode we're running in (browser vs pywebview)
+// Detect running mode (browser vs pywebview window)
 fetch('/api/mode').then(r => r.json()).then(d => { isWebview = d.webview; });
 
 // Platform selection
@@ -11,18 +11,25 @@ document.querySelectorAll('.platform-btn').forEach(btn => {
         document.querySelectorAll('.platform-btn').forEach(b => b.classList.remove('active'));
         this.classList.add('active');
         selectedPlatform = this.dataset.platform;
-        document.getElementById('inputSection').style.display = 'block';
-        document.getElementById('selectedPlatform').textContent = this.textContent;
+        document.getElementById('platformLabel').textContent = this.textContent + ' — vendor URL';
+        document.getElementById('urlSection').style.display = 'block';
         document.getElementById('resultSection').style.display = 'none';
+        document.getElementById('statusSection').style.display = 'none';
         document.getElementById('linkInput').value = '';
+        document.getElementById('linkInput').focus();
     });
+});
+
+// Extract on Enter key
+document.getElementById('linkInput').addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') document.getElementById('submitBtn').click();
 });
 
 // Start extraction
 document.getElementById('submitBtn').addEventListener('click', async function () {
     const link = document.getElementById('linkInput').value.trim();
-    if (!link) { alert('لطفا لینک را وارد کنید'); return; }
-    if (!selectedPlatform) { alert('لطفا پلتفرم را انتخاب کنید'); return; }
+    if (!link) { alert('Please enter a vendor URL.'); return; }
+    if (!selectedPlatform) { alert('Please select a platform first.'); return; }
 
     setLoading(true);
     document.getElementById('logBox').textContent = '';
@@ -35,15 +42,11 @@ document.getElementById('submitBtn').addEventListener('click', async function ()
             body: JSON.stringify({ platform: selectedPlatform, link })
         });
         const payload = await res.json();
-        if (payload.error) {
-            setLoading(false);
-            alert(payload.error);
-            return;
-        }
+        if (payload.error) { setLoading(false); alert(payload.error); return; }
         await pollJob(payload.job_id);
     } catch (err) {
         setLoading(false);
-        alert('خطا در ارتباط با سرور');
+        alert('Connection error. Is the server running?');
         console.error(err);
     }
 });
@@ -53,16 +56,13 @@ async function pollJob(jobId) {
         await sleep(2000);
         let data;
         try {
-            const res = await fetch(`/api/status/${jobId}`);
-            data = await res.json();
-        } catch (_) {
-            continue;
-        }
+            data = await fetch(`/api/status/${jobId}`).then(r => r.json());
+        } catch (_) { continue; }
 
-        // Show live logs (last 30 lines)
+        // Show last 4 lines in the log box
         const logBox = document.getElementById('logBox');
         if (data.logs && data.logs.length) {
-            logBox.textContent = data.logs.slice(-30).join('\n');
+            logBox.textContent = data.logs.slice(-4).join('\n');
             logBox.scrollTop = logBox.scrollHeight;
         }
 
@@ -72,13 +72,11 @@ async function pollJob(jobId) {
             document.getElementById('resultMessage').textContent = data.message;
 
             if (isWebview && data.downloads_dir) {
-                // Windows / pywebview: show the save path + open folder button
                 _savedFolderPath = data.downloads_dir;
-                document.getElementById('savePath').textContent = 'ذخیره شد: ' + data.downloads_dir;
+                document.getElementById('savePath').textContent = 'Saved to: ' + data.downloads_dir;
                 document.getElementById('folderSection').style.display = 'block';
                 document.getElementById('downloadLinks').style.display = 'none';
             } else {
-                // Browser: regular download links
                 const container = document.getElementById('downloadLinks');
                 container.innerHTML = '';
                 container.style.display = 'block';
@@ -86,7 +84,7 @@ async function pollJob(jobId) {
                 (data.files || []).forEach(file => {
                     const a = document.createElement('a');
                     a.href = `/download/${file.filename}`;
-                    a.textContent = `دانلود ${file.name}`;
+                    a.textContent = `Download ${file.name}`;
                     a.download = file.name;
                     container.appendChild(a);
                 });
@@ -96,13 +94,13 @@ async function pollJob(jobId) {
 
         if (data.status === 'error') {
             setLoading(false);
-            alert(data.error || 'خطایی رخ داد');
+            alert('Error: ' + (data.error || 'Unknown error'));
             break;
         }
     }
 }
 
-// Open folder via pywebview JS bridge
+// Open save folder via pywebview JS bridge
 document.getElementById('openFolderBtn').addEventListener('click', function () {
     if (window.pywebview && window.pywebview.api) {
         window.pywebview.api.open_folder(_savedFolderPath).catch(console.error);
@@ -110,9 +108,8 @@ document.getElementById('openFolderBtn').addEventListener('click', function () {
 });
 
 function setLoading(on) {
-    document.getElementById('loading').style.display = on ? 'block' : 'none';
+    document.getElementById('statusSection').style.display = on ? 'block' : 'none';
+    document.getElementById('submitBtn').disabled = on;
 }
 
-function sleep(ms) {
-    return new Promise(r => setTimeout(r, ms));
-}
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
