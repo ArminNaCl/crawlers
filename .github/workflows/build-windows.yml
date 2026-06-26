@@ -28,7 +28,10 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-          pip install pyinstaller
+          pip install pyinstaller pillow
+
+      - name: Generate app icon
+        run: python create_icon.py
 
       - name: Build EXE with PyInstaller
         run: pyinstaller build.spec
