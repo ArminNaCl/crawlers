@@ -1,5 +1,5 @@
 """
-Desktop GUI entry point for the Product Scraper application.
+Desktop GUI entry point for EComCrawler.
 
 Architecture
 ============
@@ -9,7 +9,8 @@ Architecture
     PyWebView is not installed (useful for development on Linux).
   - Each scrape job runs in its own daemon thread identified by a UUID.
   - The frontend polls GET /api/status/<job_id> every 2 s for progress.
-  - Finished CSV files are served via GET /download/<path>.
+  - On completion, CSVs are auto-saved to ~/Downloads/EComCrawler/.
+    In browser mode, /download/<path> also serves them directly.
 
 PyInstaller notes
 =================
@@ -21,6 +22,8 @@ PyInstaller notes
 from __future__ import annotations
 
 import logging
+import os
+import shutil
 import socket
 import sys
 import tempfile
@@ -41,10 +44,20 @@ else:
 
 FRONTEND_DIR = BASE_DIR / "frontend"
 
-# Per-session output lives in a sub-folder of the system temp dir so it
-# survives across multiple crawls in one session but is cleaned up on reboot.
-OUTPUT_DIR = Path(tempfile.gettempdir()) / "product_scraper_out"
+# Temp working dir for in-progress jobs
+OUTPUT_DIR = Path(tempfile.gettempdir()) / "ecomcrawler_out"
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+
+# Final save location: ~/Downloads/EComCrawler/
+_downloads_base = Path.home() / "Downloads"
+if not _downloads_base.exists():
+    _downloads_base = Path.home()
+DOWNLOADS_DIR = _downloads_base / "EComCrawler"
+DOWNLOADS_DIR.mkdir(parents=True, exist_ok=True)
+
+# ── Global mode flag (set in main() before Flask starts) ──────────────────────
+
+IS_WEBVIEW = False   # True when running inside PyWebView window
 
 # ── Job registry ──────────────────────────────────────────────────────────────
 
@@ -67,6 +80,12 @@ def static_files(filename: str):
     return send_from_directory(str(FRONTEND_DIR / "static"), filename)
 
 
+@app.route("/api/mode")
+def api_mode():
+    """Tell the frontend whether we're inside a PyWebView window."""
+    return jsonify({"webview": IS_WEBVIEW})
+
+
 @app.route("/api/extract", methods=["POST"])
 def api_extract():
     data = request.get_json(force=True) or {}
@@ -81,6 +100,7 @@ def api_extract():
             "logs": [],
             "message": "",
             "files": [],
+            "downloads_dir": "",
             "error": "",
         }
 
@@ -100,6 +120,26 @@ def api_status(job_id: str):
 @app.route("/download/<path:filename>")
 def download_file(filename: str):
     return send_from_directory(str(OUTPUT_DIR), filename, as_attachment=True)
+
+
+# ── PyWebView JS API (exposed to the frontend as window.pywebview.api) ────────
+
+class _JsApi:
+    """Methods callable from JavaScript via window.pywebview.api.<method>()."""
+
+    def open_folder(self, path: str) -> None:
+        """Open the given folder path in the OS file explorer."""
+        try:
+            if sys.platform == "win32":
+                os.startfile(path)  # type: ignore[attr-defined]
+            elif sys.platform == "darwin":
+                import subprocess
+                subprocess.Popen(["open", path])
+            else:
+                import subprocess
+                subprocess.Popen(["xdg-open", path])
+        except Exception as exc:
+            log.warning("Could not open folder %s: %s", path, exc)
 
 
 # ── Log capture ───────────────────────────────────────────────────────────────
@@ -198,18 +238,31 @@ def _run_job(job_id: str, url: str) -> None:
                 log.info("[%d] %s | %s", stats["exported"], product_id, product.title[:60])
 
         csv_files = sorted(f for f in job_out.iterdir() if f.suffix == ".csv")
+
+        # Copy finished CSVs to ~/Downloads/EComCrawler/<vendor_id>/
+        # so they're accessible from a native file manager on Windows.
+        save_dir = DOWNLOADS_DIR / vendor_id
+        save_dir.mkdir(parents=True, exist_ok=True)
+        for f in csv_files:
+            shutil.copy2(str(f), str(save_dir / f.name))
+        log.info("Files saved to %s", save_dir)
+
         files = [
             {"filename": f"{job_id}/{f.name}", "name": f.name}
             for f in csv_files
         ]
-
         message = (
             f"استخراج کامل شد — "
             f"{stats['exported']} محصول جدید "
             f"({stats['skipped']} رد شد، {stats['errors']} خطا)"
         )
         with _jobs_lock:
-            _jobs[job_id].update(status="done", message=message, files=files)
+            _jobs[job_id].update(
+                status="done",
+                message=message,
+                files=files,
+                downloads_dir=str(save_dir),
+            )
 
     except Exception as exc:  # noqa: BLE001
         log.error("Job %s failed: %s", job_id, exc)
@@ -228,6 +281,8 @@ def _find_free_port() -> int:
 
 
 def main() -> None:
+    global IS_WEBVIEW
+
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s [%(levelname)s] %(message)s",
@@ -246,27 +301,30 @@ def main() -> None:
 
     url = f"http://127.0.0.1:{port}"
 
-    _use_webview = False
+    _has_webview = False
     try:
         import webview  # type: ignore[import]
-        _use_webview = True
+        _has_webview = True
     except ImportError:
         pass
 
-    if _use_webview:
+    if _has_webview:
         try:
+            IS_WEBVIEW = True
+            api = _JsApi()
             window = webview.create_window(  # noqa: F821
-                "Product Scraper — استخراج محصولات",
+                "🐙 EComCrawler",
                 url,
                 width=700,
                 height=720,
                 resizable=True,
                 min_size=(560, 520),
+                js_api=api,
             )
             webview.start()  # noqa: F821
             return
         except Exception as exc:
-            # WebViewException: no GTK/Qt backend available (common on Linux)
+            IS_WEBVIEW = False
             log.info("pywebview backend unavailable (%s) — falling back to browser", exc)
 
     import webbrowser
