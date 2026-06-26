@@ -1,4 +1,9 @@
 let selectedPlatform = null;
+let isWebview = false;
+let _savedFolderPath = '';
+
+// Ask the server which mode we're running in (browser vs pywebview)
+fetch('/api/mode').then(r => r.json()).then(d => { isWebview = d.webview; });
 
 // Platform selection
 document.querySelectorAll('.platform-btn').forEach(btn => {
@@ -66,15 +71,26 @@ async function pollJob(jobId) {
             document.getElementById('resultSection').style.display = 'block';
             document.getElementById('resultMessage').textContent = data.message;
 
-            const container = document.getElementById('downloadLinks');
-            container.innerHTML = '';
-            (data.files || []).forEach(file => {
-                const a = document.createElement('a');
-                a.href = `/download/${file.filename}`;
-                a.textContent = `دانلود ${file.name}`;
-                a.download = file.name;
-                container.appendChild(a);
-            });
+            if (isWebview && data.downloads_dir) {
+                // Windows / pywebview: show the save path + open folder button
+                _savedFolderPath = data.downloads_dir;
+                document.getElementById('savePath').textContent = 'ذخیره شد: ' + data.downloads_dir;
+                document.getElementById('folderSection').style.display = 'block';
+                document.getElementById('downloadLinks').style.display = 'none';
+            } else {
+                // Browser: regular download links
+                const container = document.getElementById('downloadLinks');
+                container.innerHTML = '';
+                container.style.display = 'block';
+                document.getElementById('folderSection').style.display = 'none';
+                (data.files || []).forEach(file => {
+                    const a = document.createElement('a');
+                    a.href = `/download/${file.filename}`;
+                    a.textContent = `دانلود ${file.name}`;
+                    a.download = file.name;
+                    container.appendChild(a);
+                });
+            }
             break;
         }
 
@@ -85,6 +101,13 @@ async function pollJob(jobId) {
         }
     }
 }
+
+// Open folder via pywebview JS bridge
+document.getElementById('openFolderBtn').addEventListener('click', function () {
+    if (window.pywebview && window.pywebview.api) {
+        window.pywebview.api.open_folder(_savedFolderPath).catch(console.error);
+    }
+});
 
 function setLoading(on) {
     document.getElementById('loading').style.display = on ? 'block' : 'none';

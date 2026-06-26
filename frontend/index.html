@@ -3,12 +3,17 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>استخراج داده</title>
+    <title>EComCrawler</title>
+    <!-- Octopus emoji favicon via inline SVG -->
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🐙</text></svg>">
     <link rel="stylesheet" href="./static/style.css">
 </head>
 <body>
     <div class="container">
-        <h1>استخراج اطلاعات</h1>
+        <div class="app-header">
+            <span class="logo">🐙</span>
+            <h1>EComCrawler</h1>
+        </div>
 
         <div class="platform-selection">
             <h2>انتخاب پلتفرم</h2>
@@ -38,7 +43,13 @@
         <div class="result-section" id="resultSection" style="display: none;">
             <h2>نتیجه</h2>
             <p id="resultMessage"></p>
+            <!-- shown in browser mode -->
             <div id="downloadLinks"></div>
+            <!-- shown in pywebview/Windows mode -->
+            <div id="folderSection" style="display:none;">
+                <p class="save-path" id="savePath"></p>
+                <button class="open-folder-btn" id="openFolderBtn">📂 باز کردن پوشه</button>
+            </div>
         </div>
     </div>
 
