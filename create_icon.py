@@ -108,7 +108,7 @@ def main() -> None:
         format="ICO",
         sizes=[(16, 16), (32, 32), (48, 48), (256, 256)],
     )
-    print("✓ Generated assets/icon.ico")
+    print("OK Generated assets/icon.ico")
 
 
 if __name__ == "__main__":
