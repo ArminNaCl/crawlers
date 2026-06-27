@@ -2,7 +2,7 @@ import re
 import time
 import logging
 from typing import Iterator
-from urllib.parse import urlparse, unquote
+from urllib.parse import urlparse, unquote, parse_qs
 
 import requests
 
@@ -28,6 +28,7 @@ class BasalamCrawler(BaseCrawler):
         self.rate_limit = rate_limit
         self._url_type = "vendor"   # "vendor" or "category"
         self._category_url = ""     # decoded path, e.g. /cat/appliances/پنکه-دستی
+        self._cat_bar_id = None     # cat_bar query param for vendor category filter
         self._session = requests.Session()
         self._session.headers.update({
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
@@ -53,9 +54,12 @@ class BasalamCrawler(BaseCrawler):
             self._category_url = "/" + "/".join(parts)   # decoded, e.g. /cat/appliances/پنکه-دستی
             return parts[-1]                              # leaf slug returned as the "source_id"
 
-        # Vendor profile URL: /{vendor_slug}
+        # Vendor profile URL: /{vendor_slug}[?cat_bar=N]
         self._url_type = "vendor"
         self._category_url = ""
+        qs = parse_qs(parsed.query)
+        cat_bar = qs.get("cat_bar", [None])[0]
+        self._cat_bar_id = cat_bar if cat_bar else None
         return parts[-1]
 
     def iter_product_ids(self, source_id: str) -> Iterator[str]:
@@ -83,6 +87,8 @@ class BasalamCrawler(BaseCrawler):
                 if not pid:
                     continue
                 if not self._item_active(item):
+                    continue
+                if self._cat_bar_id and not self._item_matches_cat_bar(item):
                     continue
                 yield pid
 
@@ -192,6 +198,15 @@ class BasalamCrawler(BaseCrawler):
             if val is not None:
                 return str(val)
         return ""
+
+    def _item_matches_cat_bar(self, item: dict) -> bool:
+        src = item.get("_source", item)
+        target = str(self._cat_bar_id)
+        for field in ("categoryId", "new_categoryId"):
+            val = src.get(field)
+            if val is not None and str(val) == target:
+                return True
+        return False
 
     def _item_active(self, item: dict) -> bool:
         src = item.get("_source", item)
