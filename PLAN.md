@@ -10,32 +10,34 @@
 - `--no-skip` flag to force full re-export
 - UTF-8-BOM encoding for Excel compatibility
 
-## Phase 2 — Additional Sources
+## Phase 2 — Additional Sources ✅ Done
 
-Target sites (in rough priority order):
-
-| Site | Domain | Notes |
+| Site | Domain | Status |
 |---|---|---|
-| ترب | torob.com | Price comparison — crawl by seller or product category |
-| ایمالز | emalls.ir | |
-| دیجی‌کالا | digikala.com | Largest Iranian e-commerce platform |
-| دیوار | divar.ir | Classifieds — product model differs from shop sites |
+| ایمالز | emalls.ir | ✅ Done — HTML scraping, JSON-LD detail, shop + category pages |
+| اسنپ‌شاپ | snappshop.ir | ✅ Done — reverse-engineered POST API, seller + category_chips filter |
+| شاپینو | shopino.app | ✅ Done — public REST API, cursor pagination, shop + category filter |
+| ترب | torob.com | Not started |
+| دیجی‌کالا | digikala.com | Not started |
+| دیوار | divar.ir | Not started |
 
 Each new source:
 - Gets its own file in `crawlers/` implementing `BaseCrawler`
 - Defines its own currency conversion, stock defaults, and attribute mapping
-- Is registered with one line in `CRAWLER_REGISTRY` in `main.py`
+- Is registered with one line in `CRAWLER_REGISTRY` in `main.py` and `_REGISTRY` in `gui.py`
 - Nothing else in the codebase changes
 
-## Phase 3 — Desktop GUI
+## Phase 3 — Desktop GUI ✅ Done
 
-Simple Windows desktop app (Tkinter or PyQt5):
-- URL input field
-- Output directory picker
-- Progress bar with product count
-- Start / Stop button
-
-Not in current scope — CLI is sufficient for v1.
+Flask + PyWebView desktop app (EComCrawler):
+- URL input field — paste any supported site URL
+- Start button — job runs in a background thread; frontend polls for progress
+- Live log stream visible in the UI
+- CSVs auto-saved to `~/Downloads/EComCrawler/<vendor_id>/`
+- Log file at `~/Downloads/EComCrawler/ecomcrawler.log`
+- PyWebView native window (Edge/WebView2 on Windows, WebKit on macOS/Linux); falls back to system browser
+- Windows EXE built via PyInstaller (`build.spec`)
+- GitHub Actions release pipeline for automated EXE distribution
 
 ## Phase 4 — Performance (multithreading)
 
@@ -53,4 +55,4 @@ Plan:
 ## Known Limitations
 
 - **Images**: Sazito's bulk import does not upload images from the `images` CSV column. URLs are stored for reference; images must be uploaded manually in the Sazito panel after import.
-- **Categories**: The `category` CSV column is left empty — it must be mapped in the Sazito panel after import.
+- **Categories**: The `category` CSV column is populated by SnappShop only. For all other sites it is left empty and must be mapped in the Sazito panel after import.
