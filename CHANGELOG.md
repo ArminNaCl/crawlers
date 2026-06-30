@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.9.0] — 2026-06-30
+
+### Fixed
+
+- Memory deduplication is now **vendor-scoped**: the SQLite PRIMARY KEY changed from `(source_site, source_id)` to `(source_site, vendor_id, source_id)`. This means:
+  - Re-running the same vendor/category URL after days/weeks correctly skips only products already exported from *that* vendor and exports any newly added products
+  - Cancelling a job mid-way and re-running the same URL resumes from where it left off (the 40 already-exported products are skipped; the remaining are exported)
+  - The same product appearing in different vendor catalogs is exported independently for each vendor
+- Existing memory DBs are migrated automatically on first run (old records are preserved under an empty `vendor_id` scope)
+
 ## [0.8.0] — 2026-06-30
 
 ### Added

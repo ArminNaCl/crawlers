@@ -231,7 +231,7 @@ def _run_job(job_id: str, url: str, no_skip: bool = False, cancel_event: threadi
 
                 stats["seen"] += 1
 
-                if not no_skip and memory.is_exported(source_site, product_id):
+                if not no_skip and memory.is_exported(source_site, product_id, vendor_id):
                     stats["skipped"] += 1
                     continue
 
