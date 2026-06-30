@@ -207,15 +207,20 @@ Default path: `~/.cache/product_exporter/memory.db`
 
 ```sql
 CREATE TABLE IF NOT EXISTS exported_products (
-    source_site TEXT NOT NULL,
-    source_id   TEXT NOT NULL,
-    vendor_id   TEXT,
-    exported_at TEXT NOT NULL DEFAULT (datetime('now')),
-    PRIMARY KEY (source_site, source_id)
+    source_site  TEXT NOT NULL,
+    vendor_id    TEXT NOT NULL DEFAULT '',
+    source_id    TEXT NOT NULL,
+    exported_at  TEXT NOT NULL DEFAULT (datetime('now')),
+    PRIMARY KEY (source_site, vendor_id, source_id)
 );
 ```
 
-The composite primary key ensures that IDs from different sites never collide (e.g. Basalam product `12345` and a Shopino product `12345` are separate rows).
+The three-part primary key means:
+- Products from different sites never collide (e.g. Basalam `12345` vs Shopino `12345`)
+- Products from different vendors/categories on the same site are tracked independently — re-running vendor B will not skip a product that was previously exported from vendor A
+- Cancelling a job mid-run and re-running the same URL resumes from where it left off
+
+Old DBs with the two-part key `(source_site, source_id)` are migrated automatically on first run.
 
 ## Adding a New Site
 

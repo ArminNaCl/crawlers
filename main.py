@@ -84,7 +84,7 @@ def main():
         for product_id in crawler.iter_product_ids(vendor_id):
             stats["seen"] += 1
 
-            if not args.no_skip and memory.is_exported(source_site, product_id):
+            if not args.no_skip and memory.is_exported(source_site, product_id, vendor_id):
                 log.debug("Skip (already exported): %s", product_id)
                 stats["skipped"] += 1
                 continue
