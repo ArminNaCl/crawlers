@@ -54,12 +54,12 @@ class BasalamCrawler(BaseCrawler):
             self._category_url = "/" + "/".join(parts)   # decoded, e.g. /cat/appliances/پنکه-دستی
             return parts[-1]                              # leaf slug returned as the "source_id"
 
-        # Vendor profile URL: /{vendor_slug}[?cat_bar=N]
+        # Vendor profile URL: /{vendor_slug}[?cat_bar=N or ?cat=N]
         self._url_type = "vendor"
         self._category_url = ""
         qs = parse_qs(parsed.query)
-        cat_bar = qs.get("cat_bar", [None])[0]
-        self._cat_bar_id = cat_bar if cat_bar else None
+        cat_filter = qs.get("cat_bar", qs.get("cat", [None]))[0]
+        self._cat_bar_id = cat_filter if cat_filter else None
         return parts[-1]
 
     def iter_product_ids(self, source_id: str) -> Iterator[str]:
@@ -258,7 +258,7 @@ class BasalamCrawler(BaseCrawler):
             if url and url not in seen and self._is_image_url(url):
                 urls.append(url)
                 seen.add(url)
-        return urls
+        return list(reversed(urls))
 
     def _is_image_url(self, url: str) -> bool:
         if not url:

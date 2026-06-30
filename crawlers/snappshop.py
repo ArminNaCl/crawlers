@@ -187,7 +187,7 @@ class SnappShopCrawler(BaseCrawler):
             if url and url not in seen:
                 seen.add(url)
                 result.append(url)
-        return result
+        return list(reversed(result))
 
     def _extract_title(self, item: dict) -> str:
         # Prefer the first image alt tag — clean product name without SEO prefix
