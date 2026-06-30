@@ -31,6 +31,7 @@ class SnappShopCrawler(BaseCrawler):
 
     def __init__(self, rate_limit: float = 0.75):
         self.rate_limit = rate_limit
+        self._url_type: str = "vendor"   # "vendor" or "category"
         self._vendor_slug: str = ""
         self._category_chips: str = ""
         self._session = requests.Session()
@@ -49,19 +50,28 @@ class SnappShopCrawler(BaseCrawler):
 
     def extract_vendor_id(self, url: str) -> str:
         parsed = urlparse(url)
+        parts = [p for p in parsed.path.strip("/").split("/") if p]
 
         # /seller/{slug}  or  /seller/{slug}?category_chips=...
-        parts = [p for p in parsed.path.strip("/").split("/") if p]
         if len(parts) >= 2 and parts[0].lower() == "seller":
-            vendor_slug = parts[1]
+            self._url_type = "vendor"
+            self._vendor_slug = parts[1]
             qs = parse_qs(parsed.query)
-            self._vendor_slug = vendor_slug
             self._category_chips = qs.get("category_chips", [""])[0]
-            return vendor_slug
+            return self._vendor_slug
+
+        # /category/{slug}
+        if len(parts) >= 2 and parts[0].lower() == "category":
+            self._url_type = "category"
+            self._vendor_slug = ""
+            self._category_chips = ""
+            return parts[1]
 
         raise ValueError(
             f"Cannot extract vendor ID from: {url}\n"
-            "Expected format: https://snappshop.ir/seller/SLUG"
+            "Expected formats:\n"
+            "  https://snappshop.ir/seller/SLUG\n"
+            "  https://snappshop.ir/category/SLUG"
         )
 
     def iter_product_ids(self, vendor_id: str) -> Iterator[str]:
@@ -70,16 +80,26 @@ class SnappShopCrawler(BaseCrawler):
         page = 1
 
         while True:
-            body: dict = {
-                "vendor": vendor_id,
-                "limit": PAGE_SIZE,
-            }
+            if self._url_type == "category":
+                body: dict = {"category_slug": vendor_id, "limit": PAGE_SIZE}
+            else:
+                body = {"vendor": vendor_id, "limit": PAGE_SIZE}
+                if self._category_chips:
+                    body["category_chips"] = self._category_chips
             if skip > 0:
                 body["skip"] = skip
-            if self._category_chips:
-                body["category_chips"] = self._category_chips
 
-            data = self._post_json(SEARCH_URL, body)
+            try:
+                data = self._post_json(SEARCH_URL, body)
+            except CrawlerError:
+                if self._url_type == "category":
+                    log.warning(
+                        "SnappShop category API pagination limit reached at skip=%d "
+                        "(API cap ~250 products per category). Stopping early.",
+                        skip,
+                    )
+                    break
+                raise
             structure = data.get("data", {}).get("structure", [])
 
             plp = next((s for s in structure if s.get("section_type") == "plp"), None)
@@ -260,7 +280,7 @@ class SnappShopCrawler(BaseCrawler):
                 return d
             except requests.exceptions.HTTPError as e:
                 status = e.response.status_code if e.response else 0
-                if status in (404, 410) or attempt == retries - 1:
+                if status in (404, 410, 422) or attempt == retries - 1:
                     raise CrawlerError(f"HTTP {status} for {url}") from e
             except CrawlerError:
                 raise

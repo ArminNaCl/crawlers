@@ -60,6 +60,9 @@ python3 main.py --url "https://emalls.ir/لیست-قیمت~Category~32333~tag~ma
 # SnappShop — seller page with category filter
 python3 main.py --url "https://snappshop.ir/seller/0W6W2g?category_chips=g3vvnD" --output ./output
 
+# SnappShop — category page
+python3 main.py --url "https://snappshop.ir/category/clinical-thermometer" --output ./output
+
 # Shopino — shop page (all products)
 python3 main.py --url "https://shopino.app/shops/1802" --output ./output
 

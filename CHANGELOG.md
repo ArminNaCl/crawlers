@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.6.0] — 2026-06-29
+
+### Added
+
+- SnappShop category page crawling (`snappshop.ir/category/{slug}`)
+  - Uses `category_slug` field in POST body to `apix.snappshop.ir/search/v1`
+  - Same pagination and detail-fetch pipeline as seller mode
+  - `min_price_vendor` selected when no specific seller is requested
+  - API hard cap of ~264 products per category crawl (offset-based pagination fails past skip=252); crawler logs a warning and stops gracefully instead of crashing
+
+### Fixed
+
+- SnappShop: 422 responses now fail immediately without retrying (added to no-retry list)
+
 ## [0.5.0] — 2026-06-27
 
 ### Fixed

@@ -144,7 +144,9 @@ Prices in Rial — divided by 10 to get Toman.
 ```
 POST https://apix.snappshop.ir/search/v1
      ?lat=35.77331&lng=51.418591
-Body: { "vendor": "<slug>", "limit": 24, "skip": N, "category_chips": "<id>" }
+
+Seller mode body:   { "vendor": "<slug>", "limit": 24, "skip": N, "category_chips": "<id>" }
+Category mode body: { "category_slug": "<slug>", "limit": 24, "skip": N }
 ```
 
 **Product detail:**

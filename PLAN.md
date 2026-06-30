@@ -15,7 +15,7 @@
 | Site | Domain | Status |
 |---|---|---|
 | ایمالز | emalls.ir | ✅ Done — HTML scraping, JSON-LD detail, shop + category pages |
-| اسنپ‌شاپ | snappshop.ir | ✅ Done — reverse-engineered POST API, seller + category_chips filter |
+| اسنپ‌شاپ | snappshop.ir | ✅ Done — reverse-engineered POST API, seller + category_chips filter, category pages |
 | شاپینو | shopino.app | ✅ Done — public REST API, cursor pagination, shop + category filter |
 | ترب | torob.com | Not started |
 | دیجی‌کالا | digikala.com | Not started |
