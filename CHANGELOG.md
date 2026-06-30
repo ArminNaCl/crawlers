@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.7.0] — 2026-06-30
+
+### Fixed
+
+- Basalam: support both `?cat=N` and `?cat_bar=N` query params for vendor category filtering (both map to `new_categoryId` in the search API); removed leftover debug print statements that caused a crash
+- Basalam + SnappShop: reverse extracted image list so the primary product image becomes the last entry in the CSV `images` column, which Sazito uses as the default display image
+
 ## [0.6.0] — 2026-06-29
 
 ### Added
