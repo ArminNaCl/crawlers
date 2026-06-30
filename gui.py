@@ -63,6 +63,7 @@ IS_WEBVIEW = False   # True when running inside PyWebView window
 
 _jobs: dict[str, dict] = {}
 _jobs_lock = threading.Lock()
+_cancel_events: dict[str, threading.Event] = {}
 
 # ── Flask app ─────────────────────────────────────────────────────────────────
 
@@ -90,10 +91,12 @@ def api_mode():
 def api_extract():
     data = request.get_json(force=True) or {}
     url = (data.get("link") or "").strip()
+    no_skip = bool(data.get("no_skip", False))
     if not url:
         return jsonify({"error": "لینک نمی‌تواند خالی باشد"}), 400
 
     job_id = str(uuid.uuid4())
+    cancel_event = threading.Event()
     with _jobs_lock:
         _jobs[job_id] = {
             "status": "running",
@@ -103,8 +106,9 @@ def api_extract():
             "downloads_dir": "",
             "error": "",
         }
+        _cancel_events[job_id] = cancel_event
 
-    threading.Thread(target=_run_job, args=(job_id, url), daemon=True).start()
+    threading.Thread(target=_run_job, args=(job_id, url, no_skip, cancel_event), daemon=True).start()
     return jsonify({"job_id": job_id})
 
 
@@ -115,6 +119,16 @@ def api_status(job_id: str):
     if not job:
         return jsonify({"error": "Job not found"}), 404
     return jsonify(job)
+
+
+@app.route("/api/cancel/<job_id>", methods=["POST"])
+def api_cancel(job_id: str):
+    with _jobs_lock:
+        event = _cancel_events.get(job_id)
+    if not event:
+        return jsonify({"error": "Job not found"}), 404
+    event.set()
+    return jsonify({"ok": True})
 
 
 @app.route("/download/<path:filename>")
@@ -185,7 +199,7 @@ def _resolve_crawler(url: str):
     )
 
 
-def _run_job(job_id: str, url: str) -> None:
+def _run_job(job_id: str, url: str, no_skip: bool = False, cancel_event: threading.Event | None = None) -> None:
     from crawlers.base import CrawlerError, ProductUnavailableError
     from exporters.sazito_csv import SazitoCsvExporter
     from memory import ExportMemory
@@ -211,9 +225,13 @@ def _run_job(job_id: str, url: str) -> None:
              SazitoCsvExporter(str(job_out), file_prefix="output") as exporter:
 
             for product_id in crawler.iter_product_ids(vendor_id):
+                if cancel_event and cancel_event.is_set():
+                    log.info("Job cancelled after %d products exported", stats["exported"])
+                    break
+
                 stats["seen"] += 1
 
-                if memory.is_exported(source_site, product_id):
+                if not no_skip and memory.is_exported(source_site, product_id):
                     stats["skipped"] += 1
                     continue
 
@@ -237,6 +255,7 @@ def _run_job(job_id: str, url: str) -> None:
                 stats["exported"] += 1
                 log.info("[%d] %s | %s", stats["exported"], product_id, product.title[:60])
 
+        cancelled = bool(cancel_event and cancel_event.is_set())
         csv_files = sorted(f for f in job_out.iterdir() if f.suffix == ".csv")
 
         # Copy finished CSVs to ~/Downloads/EComCrawler/<vendor_id>/
@@ -251,14 +270,21 @@ def _run_job(job_id: str, url: str) -> None:
             {"filename": f"{job_id}/{f.name}", "name": f.name}
             for f in csv_files
         ]
-        message = (
-            f"استخراج کامل شد — "
-            f"{stats['exported']} محصول جدید "
-            f"({stats['skipped']} رد شد، {stats['errors']} خطا)"
-        )
+        if cancelled:
+            message = (
+                f"لغو شد — "
+                f"{stats['exported']} محصول ذخیره شد "
+                f"({stats['skipped']} رد شد، {stats['errors']} خطا)"
+            )
+        else:
+            message = (
+                f"استخراج کامل شد — "
+                f"{stats['exported']} محصول جدید "
+                f"({stats['skipped']} رد شد، {stats['errors']} خطا)"
+            )
         with _jobs_lock:
             _jobs[job_id].update(
-                status="done",
+                status="cancelled" if cancelled else "done",
                 message=message,
                 files=files,
                 downloads_dir=str(save_dir),
