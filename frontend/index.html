@@ -36,12 +36,19 @@
                 <input type="text" id="linkInput" placeholder="https://...">
                 <button class="extract-btn" id="submitBtn">Extract</button>
             </div>
+            <div class="option-row">
+                <label class="option-label">
+                    <input type="checkbox" id="noSkipCheckbox">
+                    Re-export already exported products
+                </label>
+            </div>
         </section>
 
         <section class="status-section" id="statusSection" style="display:none;">
             <div class="status-row">
                 <div class="spinner"></div>
                 <span id="statusText">Extracting products...</span>
+                <button class="cancel-btn" id="cancelBtn" style="display:none;">Cancel</button>
             </div>
             <pre id="logBox" class="log-box"></pre>
         </section>

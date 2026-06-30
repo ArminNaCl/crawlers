@@ -1,6 +1,7 @@
 let selectedPlatform = null;
 let isWebview = false;
 let _savedFolderPath = '';
+let currentJobId = null;
 
 // Detect running mode (browser vs pywebview window)
 fetch('/api/mode').then(r => r.json()).then(d => { isWebview = d.webview; });
@@ -31,6 +32,8 @@ document.getElementById('submitBtn').addEventListener('click', async function ()
     if (!link) { alert('Please enter a vendor URL.'); return; }
     if (!selectedPlatform) { alert('Please select a platform first.'); return; }
 
+    const noSkip = document.getElementById('noSkipCheckbox').checked;
+
     setLoading(true);
     document.getElementById('logBox').textContent = '';
     document.getElementById('resultSection').style.display = 'none';
@@ -39,16 +42,27 @@ document.getElementById('submitBtn').addEventListener('click', async function ()
         const res = await fetch('/api/extract', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ platform: selectedPlatform, link })
+            body: JSON.stringify({ platform: selectedPlatform, link, no_skip: noSkip })
         });
         const payload = await res.json();
         if (payload.error) { setLoading(false); alert(payload.error); return; }
+        currentJobId = payload.job_id;
         await pollJob(payload.job_id);
     } catch (err) {
         setLoading(false);
         alert('Connection error. Is the server running?');
         console.error(err);
     }
+});
+
+// Cancel running job
+document.getElementById('cancelBtn').addEventListener('click', async function () {
+    if (!currentJobId) return;
+    this.disabled = true;
+    this.textContent = 'Cancelling…';
+    try {
+        await fetch(`/api/cancel/${currentJobId}`, { method: 'POST' });
+    } catch (_) {}
 });
 
 async function pollJob(jobId) {
@@ -66,7 +80,7 @@ async function pollJob(jobId) {
             logBox.scrollTop = logBox.scrollHeight;
         }
 
-        if (data.status === 'done') {
+        if (data.status === 'done' || data.status === 'cancelled') {
             setLoading(false);
             document.getElementById('resultSection').style.display = 'block';
             document.getElementById('resultMessage').textContent = data.message;
@@ -110,6 +124,11 @@ document.getElementById('openFolderBtn').addEventListener('click', function () {
 function setLoading(on) {
     document.getElementById('statusSection').style.display = on ? 'block' : 'none';
     document.getElementById('submitBtn').disabled = on;
+    const cancelBtn = document.getElementById('cancelBtn');
+    cancelBtn.style.display = on ? 'inline-block' : 'none';
+    cancelBtn.disabled = false;
+    cancelBtn.textContent = 'Cancel';
+    if (!on) currentJobId = null;
 }
 
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }

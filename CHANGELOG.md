@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.8.0] — 2026-06-30
+
+### Added
+
+- GUI: **No-skip checkbox** — "Re-export already exported products" toggle below the URL input; when checked, `memory.is_exported()` check is bypassed for the job (same as CLI `--no-skip`)
+- GUI: **Cancel button** — appears next to the spinner while a job is running; clicking it signals the crawl loop to stop after the current product and saves any already-exported CSVs to `~/Downloads/EComCrawler/` with a "لغو شد" status message
+- Backend: `POST /api/cancel/<job_id>` endpoint sets a `threading.Event` that the job loop checks between products
+
 ## [0.7.0] — 2026-06-30
 
 ### Fixed
