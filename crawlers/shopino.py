@@ -2,7 +2,7 @@ import re
 import time
 import logging
 from typing import Iterator
-from urllib.parse import urlparse, parse_qs
+from urllib.parse import urlparse, parse_qs, quote
 
 import requests
 
@@ -14,6 +14,7 @@ log = logging.getLogger(__name__)
 API_BASE     = "https://api-go.shopino.app/api/v1/app"
 PRODUCTS_URL = f"{API_BASE}/shops/{{shop_id}}/products/"
 DETAIL_URL   = f"{API_BASE}/products/{{product_id}}/"
+SEARCH_URL = f"{API_BASE}/products/search-ai/{{query}}/"
 WEB_BASE     = "https://shopino.app"
 UNLIMITED_STOCK = -1
 
@@ -25,6 +26,8 @@ class ShopinoCrawler(BaseCrawler):
     site_name = "shopino"
 
     def __init__(self, rate_limit: float = 0.75):
+        self._url_type = "shop"      # shop | search
+        self._search_query = ""
         self.rate_limit = rate_limit
         self._category_id: str = ""
         self._session = requests.Session()
@@ -42,47 +45,91 @@ class ShopinoCrawler(BaseCrawler):
 
     def extract_vendor_id(self, url: str) -> str:
         parsed = urlparse(url)
+
+        # ---------------- search ----------------
+        # /search?q=...
+        if parsed.path == "/search":
+            qs = parse_qs(parsed.query)
+            query = qs.get("q", [""])[0].strip()
+
+            if not query:
+                raise ValueError("Search URL has no q parameter.")
+
+            self._url_type = "search"
+            self._search_query = query
+
+            return query
+        # ---------------- shop ----------------
         m = re.search(r"/shops/(\d+)", parsed.path)
         if m:
+            self._url_type = "shop"
+
             shop_id = m.group(1)
+
             qs = parse_qs(parsed.query)
             self._category_id = qs.get("category", [""])[0]
+
             return shop_id
 
         raise ValueError(
-            f"Cannot extract shop ID from: {url}\n"
-            "Expected format: https://shopino.app/shops/1802"
+            f"Cannot extract source from: {url}\n"
+            "Expected:\n"
+            "  https://shopino.app/shops/1802\n"
+            "  https://shopino.app/search?q=..."
         )
 
-    def iter_product_ids(self, vendor_id: str) -> Iterator[str]:
-        url = PRODUCTS_URL.format(shop_id=vendor_id)
-        params: dict = {}
-        if self._category_id:
-            params["category"] = self._category_id
+    def iter_product_ids(self, source_id: str) -> Iterator[str]:
+        if self._url_type == "shop":
+            yield from self._iter_shop_product_ids(source_id)
+        else:
+            yield from self._iter_search_product_ids(source_id)
 
-        page = 1
+
+    def _iter_search_product_ids(self, query: str) -> Iterator[str]:
+        offset = 0
         total = 0
 
-        while url:
-            data = self._get_json(url, params=params)
-            params = {}  # Only for the first request — subsequent pages via `next` URL
+        while True:
+            url = SEARCH_URL.format(query=quote(query))
 
-            results = data.get("results") or []
+            params = {
+                "search": query,
+                "offset": offset,
+                "place": "main_page"
+            }
+
+            data = self._get_json(url, params=params)
+
+            # Adjust this after inspecting the first response
+            print(data.keys())
+            results = data.get("results") or data.get("data") or data.get("products") or []
+            print(results)
+
             if not results:
                 break
 
-            for p in results:
-                if p.get("in_stock"):
-                    yield str(p["id"])
+            for product in results:
+                print(product)
+                if product.get("in_stock", True):
+                    print("hi")
+                    yield str(product["id"])
                     total += 1
 
-            log.info("Page %d: %d items (running total: %d)", page, len(results), total)
-            url = data.get("next")
-            if url:
-                page += 1
-                time.sleep(self.rate_limit)
+            log.info(
+                "Offset %d: %d items (running total: %d)",
+                offset,
+                len(results),
+                total,
+            )
 
-        log.info("Found %d in-stock products", total)
+            # stop when the last page is reached
+            if len(results) < 100:
+                break
+
+            offset += 100
+            time.sleep(self.rate_limit)
+
+        log.info("Found %d products", total)
 
     def get_product_detail(self, product_id: str) -> Product:
         url = DETAIL_URL.format(product_id=product_id)

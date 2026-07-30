@@ -14,6 +14,7 @@ log = logging.getLogger(__name__)
 BASE_URL       = "https://snappshop.ir"
 API_BASE       = "https://apix.snappshop.ir"
 SEARCH_URL     = f"{API_BASE}/search/v1"
+CATEGORY_URL   = f"{API_BASE}/landing/v2"
 DETAIL_URL     = f"{API_BASE}/products/v2/{{product_id}}"
 # Default Tehran coordinates required by the location-aware API
 DEFAULT_LAT    = 35.77331
@@ -31,9 +32,10 @@ class SnappShopCrawler(BaseCrawler):
 
     def __init__(self, rate_limit: float = 0.75):
         self.rate_limit = rate_limit
-        self._url_type: str = "vendor"   # "vendor" or "category"
+        self._url_type: str = "vendor"   # "vendor" or "category" or "search"
         self._vendor_slug: str = ""
         self._category_chips: str = ""
+        self._search_query = ""
         self._session = requests.Session()
         self._session.headers.update({
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
@@ -51,6 +53,19 @@ class SnappShopCrawler(BaseCrawler):
     def extract_vendor_id(self, url: str) -> str:
         parsed = urlparse(url)
         parts = [p for p in parsed.path.strip("/").split("/") if p]
+
+        if len(parts) == 1 and parts[0].lower() == "search":
+            qs = parse_qs(parsed.query)
+
+            query = qs.get("query", [""])[0].strip()
+
+            if not query:
+                raise ValueError("Search URL does not contain a query.")
+
+            self._url_type = "search"
+            self._search_query = query
+
+            return query
 
         # /seller/{slug}  or  /seller/{slug}?category_chips=...
         if len(parts) >= 2 and parts[0].lower() == "seller":
@@ -80,17 +95,44 @@ class SnappShopCrawler(BaseCrawler):
         page = 1
 
         while True:
-            if self._url_type == "category":
-                body: dict = {"category_slug": vendor_id, "limit": PAGE_SIZE}
-            else:
-                body = {"vendor": vendor_id, "limit": PAGE_SIZE}
+            if self._url_type == "search":
+                url = SEARCH_URL
+                body = {
+                    "page_type": "search",
+                    "query": vendor_id,
+                    "render": 4,
+                    "limit": PAGE_SIZE,
+                }
+
+            elif self._url_type == "category":
+                url = CATEGORY_URL
+                body = {
+                    "is_available": True,
+                    "page_type": "category",
+                    "slug": vendor_id,
+                    "render": 4,
+                    "limit": PAGE_SIZE,
+                    "referrer": "https://www.karlancer.com/"
+                }
+
+            elif self._url_type == "vendor":
+                url = SEARCH_URL
+                body = {
+                    "vendor": vendor_id,
+                    "limit": PAGE_SIZE,
+                }
+
                 if self._category_chips:
                     body["category_chips"] = self._category_chips
+            
+            else:
+                raise ValueError(f"Unknown url type: {self._url_type}")
+
             if skip > 0:
                 body["skip"] = skip
 
             try:
-                data = self._post_json(SEARCH_URL, body)
+                data = self._post_json(url, body)
             except CrawlerError:
                 if self._url_type == "category":
                     log.warning(
