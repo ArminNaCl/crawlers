@@ -169,7 +169,7 @@ class SnappShopCrawler(BaseCrawler):
             if page >= total_pages:
                 break
             page += 1
-            skip += PAGE_SIZE
+            skip += 1
             time.sleep(self.rate_limit)
 
     def get_product_detail(self, product_id: str) -> Product:
