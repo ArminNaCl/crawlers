@@ -85,6 +85,44 @@ class ShopinoCrawler(BaseCrawler):
             yield from self._iter_search_product_ids(source_id)
 
 
+    def _iter_shop_product_ids(self, shop_id: str) -> Iterator[str]:
+        url = PRODUCTS_URL.format(shop_id=shop_id)
+        params = {}
+
+        if self._category_id:
+            params["category"] = self._category_id
+
+        page = 1
+        total = 0
+
+        while url:
+            data = self._get_json(url, params=params)
+            params = {}
+
+            results = data.get("results") or []
+            if not results:
+                break
+
+            for p in results:
+                if p.get("in_stock"):
+                    yield str(p["id"])
+                    total += 1
+
+            log.info(
+                "Page %d: %d items (running total: %d)",
+                page,
+                len(results),
+                total,
+            )
+
+            url = data.get("next")
+
+            if url:
+                page += 1
+                time.sleep(self.rate_limit)
+
+        log.info("Found %d in-stock products", total)
+
     def _iter_search_product_ids(self, query: str) -> Iterator[str]:
         offset = 0
         total = 0
@@ -101,17 +139,13 @@ class ShopinoCrawler(BaseCrawler):
             data = self._get_json(url, params=params)
 
             # Adjust this after inspecting the first response
-            print(data.keys())
             results = data.get("results") or data.get("data") or data.get("products") or []
-            print(results)
 
             if not results:
                 break
 
             for product in results:
-                print(product)
                 if product.get("in_stock", True):
-                    print("hi")
                     yield str(product["id"])
                     total += 1
 
@@ -157,7 +191,7 @@ class ShopinoCrawler(BaseCrawler):
             title=title,
             description=description,
             url=f"{WEB_BASE}/product/{product_id}",
-            images=images,
+            images=images[::-1],
             category="",
             variants=variants,
         )

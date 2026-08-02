@@ -3,7 +3,7 @@ import re
 import time
 import logging
 from typing import Iterator
-from urllib.parse import urlparse, unquote
+from urllib.parse import urlparse, unquote, quote
 
 import requests
 
@@ -14,6 +14,7 @@ log = logging.getLogger(__name__)
 
 SHOP_URL  = "https://emalls.ir/Shop/{shop_id}"
 BASE_URL  = "https://emalls.ir"
+SEARCH_URL = f"{BASE_URL}/_Search.ashx"
 UNLIMITED_STOCK = -1
 
 # Reversed product path format: /slug~id~12345
@@ -31,6 +32,7 @@ class EmallsCrawler(BaseCrawler):
         self.rate_limit = rate_limit
         self._product_urls: dict = {}   # product_id → URL path, populated by iter_product_ids
         self._listing_url: str = ""     # set by extract_vendor_id, used by iter_product_ids
+        self._listing_type = "category"   # shop | category
         self._session = requests.Session()
         self._session.headers.update({
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
@@ -50,16 +52,20 @@ class EmallsCrawler(BaseCrawler):
         # Shape 1: /Shop/{shop_id}
         if path.lower().startswith("shop/"):
             shop_id = path.split("/")[1]
+
+            self._listing_type = "shop"
             self._listing_url = SHOP_URL.format(shop_id=shop_id)
+
             return shop_id
 
         # Shape 2: /slug~shop~{shop_id}   or   /slug~Category~{category_id}
         m = re.search(r"~(shop|category)~(\d+)", path, re.I)
         if m:
+            self._listing_type = m.group(1).lower()
             vendor_id = m.group(2)
-            self._listing_url = url   # use the original URL as-is
-            return vendor_id
+            self._listing_url = url
 
+            return vendor_id
         raise ValueError(
             f"Cannot extract vendor ID from: {url}\n"
             "Expected formats:\n"
@@ -68,7 +74,14 @@ class EmallsCrawler(BaseCrawler):
             "  https://emalls.ir/لیست-قیمت_کالا~Category~32333"
         )
 
-    def iter_product_ids(self, vendor_id: str) -> Iterator[str]:
+
+    def iter_product_ids(self, vendor_id: str):
+        if self._listing_type == "shop":
+            yield from self._iter_shop_products(vendor_id)
+        else:
+            yield from self._iter_category_products()
+
+    def _iter_category_products(self) -> Iterator[str]:
         # Strip any existing ~page~N from the base URL so we can paginate cleanly
         base_url = _PAGE_RE.sub("", self._listing_url).rstrip("~")
 
@@ -111,6 +124,69 @@ class EmallsCrawler(BaseCrawler):
             time.sleep(self.rate_limit)
 
         log.info("Found %d unique products across %d pages", len(seen), page)
+
+ 
+    def _iter_shop_products(self, shop_id):
+
+        seen = set()
+
+        # page 1
+        html = self._get_html(self._listing_url)
+
+        yield from self._extract_products_from_html(
+            html,
+            seen
+        )
+
+
+        page = 2
+
+        while True:
+
+            body = {
+                "entekhab": "listitemv2",
+                "currenturl": self._listing_url,
+                "attfilters": "",
+                "minprice": "0",
+                "maxprice": "0",
+                "brandid": "0",
+                "findstr": "",
+                "pagenum": str(page),
+                "exist": "",
+                "shop": shop_id,
+                "sort": "vd",
+            }
+
+
+            resp = self._session.post(
+                SEARCH_URL,
+                data=body,
+                headers={
+                    "X-Requested-With": "XMLHttpRequest",
+                    "Referer": self._listing_url,
+                },
+                timeout=20,
+            )
+
+            data = resp.json()
+
+
+            before = len(seen)
+
+            yield from self._extract_products_json(
+                data,
+                seen
+            )
+
+
+            added = len(seen) - before
+
+            if added == 0:
+                break
+
+
+            page += 1
+            time.sleep(self.rate_limit)
 
     def get_product_detail(self, product_id: str) -> Product:
         path = self._product_urls.get(product_id)
@@ -196,3 +272,61 @@ class EmallsCrawler(BaseCrawler):
             return int(float(str(val).replace(",", "").strip()))
         except (ValueError, TypeError):
             return 0
+
+    def _extract_products_json(self, data, seen):
+
+        products = data.get("lstsearchresualt", [])
+
+        for item in products:
+
+            product_id = str(item.get("id"))
+
+            if not product_id:
+                continue
+
+            if product_id in seen:
+                continue
+
+
+            seen.add(product_id)
+
+
+            # link is already in the correct format
+            url_path = item.get("link")
+
+            if not url_path:
+                continue
+
+
+            self._product_urls[product_id] = url_path
+
+
+            yield product_id
+
+    def _extract_products_from_html(self, html, seen):
+
+        esrevers = re.findall(
+            r'data-esrever="([^"]+)"',
+            html
+        )
+
+        for raw in esrevers:
+
+            reversed_val = raw[::-1]
+
+            m = _ESREVER_RE.search(reversed_val)
+
+            if not m:
+                continue
+
+            url_path = m.group(1)
+            product_id = m.group(2)
+
+            if product_id in seen:
+                continue
+
+            seen.add(product_id)
+
+            self._product_urls[product_id] = url_path
+
+            yield product_id
