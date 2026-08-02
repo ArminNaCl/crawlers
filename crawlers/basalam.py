@@ -13,6 +13,9 @@ log = logging.getLogger(__name__)
 
 SEARCH_URL = "https://search.basalam.com/ai-engine/api/v2.0/product/search"
 DETAIL_URL = "https://core.basalam.com/v3/products/{product_id}"
+SEARCH_KEYWORD_URL = (
+    "https://services.basalam.com/web/v1/search/product/search"
+)
 PAGE_SIZE = 24
 UNLIMITED_STOCK = -1
 _HTML_TAG_RE = re.compile(r"<[^>]+>")
@@ -29,6 +32,7 @@ class BasalamCrawler(BaseCrawler):
         self._url_type = "vendor"   # "vendor" or "category"
         self._category_url = ""     # decoded path, e.g. /cat/appliances/پنکه-دستی
         self._cat_bar_id = None     # cat_bar query param for vendor category filter
+        self._search_query = None
         self._session = requests.Session()
         self._session.headers.update({
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
@@ -41,32 +45,98 @@ class BasalamCrawler(BaseCrawler):
     # BaseCrawler interface                                                #
     # ------------------------------------------------------------------ #
 
+
     def extract_vendor_id(self, url: str) -> str:
         parsed = urlparse(url)
-        # URL-decode each path segment individually
+
+        # ---------- Search URL ----------
+        if parsed.path == "/s":
+            qs = parse_qs(parsed.query)
+            query = qs.get("q", [""])[0].strip()
+
+            if not query:
+                raise ValueError("Search URL has no query")
+
+            self._url_type = "search"
+            self._search_query = query
+            return query
+
+        # ---------- Existing logic ----------
         parts = [unquote(p) for p in parsed.path.strip("/").split("/") if p]
+
         if not parts:
             raise ValueError(f"Cannot extract source ID from: {url}")
 
         if parts[0] == "cat":
-            # Category URL: /cat/{parentSlug}/{leafSlug}
             self._url_type = "category"
-            self._category_url = "/" + "/".join(parts)   # decoded, e.g. /cat/appliances/پنکه-دستی
-            return parts[-1]                              # leaf slug returned as the "source_id"
+            self._category_url = "/" + "/".join(parts)
+            return parts[-1]
 
-        # Vendor profile URL: /{vendor_slug}[?cat_bar=N or ?cat=N]
         self._url_type = "vendor"
         self._category_url = ""
+
         qs = parse_qs(parsed.query)
         cat_filter = qs.get("cat_bar", qs.get("cat", [None]))[0]
         self._cat_bar_id = cat_filter if cat_filter else None
+
         return parts[-1]
 
-    def iter_product_ids(self, source_id: str) -> Iterator[str]:
-        if self._url_type == "category":
-            yield from self._iter_category_product_ids(source_id)
-        else:
+    def iter_product_ids(self, source_id: str):
+
+        if self._url_type == "vendor":
             yield from self._iter_vendor_product_ids(source_id)
+
+        elif self._url_type == "category":
+            yield from self._iter_category_product_ids(source_id)
+
+        elif self._url_type == "search":
+            yield from self._iter_search_product_ids(source_id)
+
+        else:
+            raise ValueError(f"Unknown url type {self._url_type}")
+
+    def _iter_search_product_ids(self, query: str):
+        offset = 0
+
+        while True:
+
+            params = {
+                "from": offset,
+                "q": query,
+                "dynamicFacets": "true",
+                "size": PAGE_SIZE,
+                "enableNavigations": "true",
+                "adsImpressionDisable": "false",
+                "grouped": "true",
+            }
+
+            data = self._get_json(
+                SEARCH_KEYWORD_URL,
+                params=params,
+            )
+
+            items = self._extract_hits(data)
+
+            if not items:
+                break
+
+            for item in items:
+
+                pid = self._item_id(item)
+
+                if not pid:
+                    continue
+
+                if not self._item_active(item):
+                    continue
+
+                yield pid
+
+            if len(items) < PAGE_SIZE:
+                break
+
+            offset += PAGE_SIZE
+            time.sleep(self.rate_limit)
 
     def _iter_vendor_product_ids(self, vendor_id: str) -> Iterator[str]:
         offset = 0
