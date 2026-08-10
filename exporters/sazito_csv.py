@@ -4,7 +4,7 @@ from pathlib import Path
 
 from models import Product, ProductVariant
 
-MAX_FILE_BYTES = 5 * 1024 * 1024  # 5 MB
+MAX_FILE_BYTES = 4 * 1024 * 1024  # 4 MB
 MAX_VARIANT_ATTRS = 10
 
 COLUMNS = [
